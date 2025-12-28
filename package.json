@@ -1,0 +1,39 @@
+{
+  "name": "100mexicanos",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "dev:server": "nodemon --watch server --ext ts --exec tsx server/socket-server.ts",
+    "dev:all": "concurrently -n NEXT,SOCKET -c auto \"npm run dev\" \"npm run dev:server\"",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@rive-app/react-canvas": "^4.25.1",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "next": "16.1.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "socket.io": "^4.8.2",
+    "socket.io-client": "^4.8.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.1",
+    "nodemon": "^3.1.11",
+    "tailwindcss": "^4",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5"
+  }
+}
