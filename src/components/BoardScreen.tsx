@@ -371,16 +371,7 @@ export default function BoardScreen() {
 
       {/* CONTENIDO */}
       <div className={styles.wrap}>
-        <header className={styles.header}>
-          {/* ✅ SOLO CHIP DE RONDA */}
-          <div className={styles.titleBox}>
-            <div className={styles.sub}>
-              <span className={styles.pill}>
-                Ronda <b>{stableState.round}</b>/{stableState.roundsTotal}
-              </span>
-            </div>
-          </div>
-        </header>
+        {/* ✅ HEADER ELIMINADO (sin chip de ronda) */}
 
         <main className={styles.stage}>
           {/* TEAM A */}
@@ -397,7 +388,9 @@ export default function BoardScreen() {
                   ref={(el) => {
                     strikeSlotsA.current[i] = el
                   }}
-                  className={`${styles.teamX} ${i < Math.min(3, stableState.teams.A.strikes) ? styles.teamXOn : ''}`}
+                  className={`${styles.teamX} ${
+                    i < Math.min(3, stableState.teams.A.strikes) ? styles.teamXOn : ''
+                  }`}
                 >
                   X
                 </div>
@@ -435,8 +428,8 @@ export default function BoardScreen() {
               <div className={styles.winner}>
                 <div className={styles.winBig}>{winnerText}</div>
                 <div className={styles.winSmall}>
-                  Final: {stableState.teams.A.name} <b>{stableState.teams.A.score}</b> · {stableState.teams.B.name}{' '}
-                  <b>{stableState.teams.B.score}</b>
+                  Final: {stableState.teams.A.name} <b>{stableState.teams.A.score}</b> ·{' '}
+                  {stableState.teams.B.name} <b>{stableState.teams.B.score}</b>
                 </div>
               </div>
             )}
@@ -456,7 +449,9 @@ export default function BoardScreen() {
                   ref={(el) => {
                     strikeSlotsB.current[i] = el
                   }}
-                  className={`${styles.teamX} ${i < Math.min(3, stableState.teams.B.strikes) ? styles.teamXOn : ''}`}
+                  className={`${styles.teamX} ${
+                    i < Math.min(3, stableState.teams.B.strikes) ? styles.teamXOn : ''
+                  }`}
                 >
                   X
                 </div>
@@ -512,7 +507,9 @@ function AnswerRow({
       </div>
 
       <div className={styles.p}>
-        {!revealed ? '' : (
+        {!revealed ? (
+          ''
+        ) : (
           <div key={flipKey + '-p'} className={styles.revealPts}>
             {points}
           </div>
