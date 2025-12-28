@@ -8,7 +8,28 @@
   --redGlow: rgba(239,68,68,.28);
 }
 
-.fb2Root{ min-height:100vh; background:var(--bg); color:#fff; position:relative; overflow:hidden; }
+/* ✅ FIX Next/Turbopack: NO se puede :global(html, body) con coma */
+:global(html){
+  height: 100%;
+}
+:global(body){
+  height: 100%;
+  margin: 0;
+  overflow: hidden; /* evita scroll global */
+}
+:global(#__next){
+  height: 100%;
+}
+
+/* ✅ evita scroll global (TV / cualquier pantalla) */
+.fb2Root{
+  height: 100dvh;
+  min-height: 100dvh;
+  background:var(--bg);
+  color:#fff;
+  position:relative;
+  overflow:hidden;
+}
 
 .bg{
   position:absolute; inset:0;
@@ -50,10 +71,11 @@
 .wrap{
   position:relative; z-index:2;
   padding: calc(54px + 14px) calc(54px + 14px) calc(54px + 18px);
-  min-height:100vh;
+  height: 100%;
   display:flex;
   flex-direction:column;
   gap:14px;
+  overflow: hidden;
 }
 
 .header{ display:flex; align-items:flex-start; justify-content:space-between; gap:14px; flex-wrap:wrap; }
@@ -91,17 +113,30 @@
   gap: clamp(12px, 2vw, 18px);
   align-items: start;
   flex:1;
+  min-height: 0; /* ✅ importante para evitar overflow raro */
 }
 
+/* =========================
+   ✅ FIX PRINCIPAL AQUÍ:
+   Nombre + Taches + Puntos JUNTOS
+   ========================= */
 .team{
   border-radius: 26px;
   border: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(255, 200, 120, .18), rgba(0,0,0,.35));
   padding: 16px 14px;
-  display:grid;
+
+  /* antes: display:grid (y se estira). Ahora: flex para “pegar” contenido */
+  display:flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start; /* ✅ todo arriba */
   gap: 10px;
-  justify-items:center;
+
   text-align:center;
+  align-self: start;       /* ✅ NO se estira a la altura del board */
+  height: fit-content;     /* ✅ compacta */
+  min-height: 0;
 }
 .teamActive{
   border-color: rgba(255, 220, 140, .34);
@@ -142,7 +177,7 @@
   display:flex;
   justify-content:center;
   gap: 10px;
-  padding: 6px 0 2px;
+  padding: 2px 0 0;
 }
 .teamX{
   width: 54px;
@@ -164,23 +199,31 @@
   text-shadow: 0 0 18px rgba(239, 68, 68, .30);
 }
 
+/* ✅ El score ya NO “empuja” todo abajo. Lo hacemos compacto pero pro */
 .teamScore{
   width:100%;
-  padding: 12px 0;
+  padding: 10px 0;
   border-radius: 22px;
   font-weight: 1000;
-  font-size: clamp(54px, 6vw, 110px);
+
+  /* un poco más controlado en alturas pequeñas */
+  font-size: clamp(44px, 5.2vw, 92px);
+  line-height: 1;
+
   background: rgba(60,16,6,.78);
   border: 1px solid rgba(255,255,255,.20);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
 }
 
+/* BOARD */
 .board{
   border-radius: 34px;
   border: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(255, 170, 70, .22), rgba(0,0,0,.40));
   padding: clamp(14px, 2vw, 22px);
   position:relative;
+  min-height: 0;
+  align-self: start; /* ✅ evita estirarse raro */
 }
 
 .bank{
@@ -223,6 +266,8 @@
   color: var(--white);
 }
 
+/* ✅ Mantengo tu scroll interno solo aquí (si hay muchas respuestas),
+   sin scroll global (TV). */
 .answers{
   margin-top: 14px;
   display:grid;
@@ -507,7 +552,7 @@
   100% { transform: translate3d(0, -125vh, 0) scale(1); opacity: .92; }
 }
 
-/* ===== AnswerRow styles (aquí mismo para que sean SOLO 2 archivos) ===== */
+/* ===== AnswerRow styles ===== */
 .ar{
   display:grid;
   grid-template-columns: 74px 1fr 140px;
@@ -532,14 +577,6 @@
   border: 1px solid rgba(0,0,0,.18);
 }
 .mid{ min-width:0; position:relative; padding-bottom: 10px; }
-.t{
-  font-weight: 1000;
-  font-size: clamp(18px, 2.2vw, 34px);
-  color: rgba(255,255,255,.95);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .dots{
   position:absolute; left:0; right:0; bottom:0;
   height: 2px;
@@ -566,10 +603,12 @@
   justify-content:flex-end;
 }
 
+/* ✅ Responsive */
 @media (max-width: 1100px){
   .stage{ grid-template-columns: 1fr; }
   .teamStrikes{ justify-content:center; }
 }
+
 @media (max-width: 560px){
   .teamX{ width: 46px; height: 46px; font-size: 24px; }
   .flyX{ width: 180px; height: 180px; margin-left:-90px; margin-top:-90px; font-size: 130px; }
@@ -580,5 +619,3 @@
 
   .spot{ width: 70vw; }
 }
-
-
