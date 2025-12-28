@@ -191,7 +191,9 @@ function makeInitialState(): BoardState {
     winner: null,
     awaitingChallengerDecision: false,
 
-    current: matchRounds[0] ? cloneRound(matchRounds[0]) : ({ label: 'Ronda 1', multiplier: 1, question: 'Sin preguntas válidas', answers: [] } as any),
+    current: matchRounds[0]
+      ? cloneRound(matchRounds[0])
+      : ({ label: 'Ronda 1', multiplier: 1, question: 'Sin preguntas válidas', answers: [] } as any),
   }
 }
 
@@ -206,8 +208,11 @@ function resetRoundForIndex(idx: number) {
   state.round = idx + 1
 
   const src = matchRounds[idx]
-  state.current = src ? cloneRound(src) : ({ label: `Ronda ${idx + 1}`, multiplier: 1, question: 'Sin preguntas válidas', answers: [] } as any)
+  state.current = src
+    ? cloneRound(src)
+    : ({ label: `Ronda ${idx + 1}`, multiplier: 1, question: 'Sin preguntas válidas', answers: [] } as any)
 
+  // ✅ reinicio automático de taches al cambiar de ronda
   state.teams.A.strikes = 0
   state.teams.B.strikes = 0
 
@@ -224,30 +229,89 @@ function computeWinner(): TeamId | 'TIE' {
   return a > b ? 'A' : 'B'
 }
 
+/**
+ * ✅ Regla: “ronda jugada” = algo cambió en la ronda.
+ * (reveal OR strikes OR bank)
+ */
+function roundHasProgress() {
+  const anyRevealed = (state.current?.answers ?? []).some((a: any) => !!a?.revealed)
+  const anyStrikes = (state.teams.A.strikes ?? 0) > 0 || (state.teams.B.strikes ?? 0) > 0
+  const anyBank = (state.roundBank ?? 0) > 0
+  return anyRevealed || anyStrikes || anyBank
+}
+
 function applyAction(action: HostAction) {
   switch (action.type) {
+    /**
+     * ✅ NOMBRES:
+     * - SOLO en SETUP (al inicio).
+     * - En FINISHED + awaitingChallengerDecision:
+     *   solo se permite si el ganador NO cambia nombre
+     *   (el retador reemplaza al perdedor).
+     */
     case 'SET_TEAMS': {
-      state.teams.A = { ...state.teams.A, name: action.teamA || 'Equipo 1', score: 0, strikes: 0 }
-      state.teams.B = { ...state.teams.B, name: action.teamB || 'Equipo 2', score: 0, strikes: 0 }
+      const allowSetup = state.phase === 'SETUP'
+      const allowRetador = state.phase === 'FINISHED' && !!state.awaitingChallengerDecision
+      if (!allowSetup && !allowRetador) return
+
+      if (allowRetador) {
+        // Solo aplica si hay ganador A/B
+        if (state.winner !== 'A' && state.winner !== 'B') return
+        const w: TeamId = state.winner
+
+        const winnerName = state.teams[w].name
+        const nextA = String(action.teamA ?? '').trim()
+        const nextB = String(action.teamB ?? '').trim()
+
+        // ganador NO puede cambiar nombre
+        if (w === 'A' && nextA && nextA !== winnerName) return
+        if (w === 'B' && nextB && nextB !== winnerName) return
+
+        const safeA = (nextA || state.teams.A.name).trim() || 'Equipo 1'
+        const safeB = (nextB || state.teams.B.name).trim() || 'Equipo 2'
+
+        state.teams.A = { ...state.teams.A, name: safeA, score: 0, strikes: 0 }
+        state.teams.B = { ...state.teams.B, name: safeB, score: 0, strikes: 0 }
+
+        // volvemos a SETUP para START_MATCH
+        state.phase = 'SETUP'
+        state.winner = null
+        state.awaitingChallengerDecision = false
+
+        emitState()
+        return
+      }
+
+      // SETUP normal: sí deja cambiar ambos
+      state.teams.A = { ...state.teams.A, name: (action.teamA || 'Equipo 1').trim(), score: 0, strikes: 0 }
+      state.teams.B = { ...state.teams.B, name: (action.teamB || 'Equipo 2').trim(), score: 0, strikes: 0 }
       state.phase = 'SETUP'
       state.winner = null
       state.awaitingChallengerDecision = false
+
       emitState()
       return
     }
 
     case 'SET_ROUNDS_TOTAL': {
+      // ✅ solo en SETUP (si ya están jugando, no cambies rondas)
+      if (state.phase !== 'SETUP') return
+
       state.roundsTotal = clamp(Number(action.roundsTotal || 10), 1, 50)
       matchRounds = pickValidRounds(state.roundsTotal)
-      state.phase = 'SETUP'
+
       state.winner = null
       state.awaitingChallengerDecision = false
+
       resetRoundForIndex(0)
       emitState()
       return
     }
 
     case 'START_MATCH': {
+      // ✅ solo arrancar desde SETUP
+      if (state.phase !== 'SETUP') return
+
       matchRounds = pickValidRounds(state.roundsTotal)
 
       state.phase = 'PLAYING'
@@ -263,13 +327,15 @@ function applyAction(action: HostAction) {
     }
 
     case 'SET_TURN_TEAM': {
-      if (state.phase === 'STEAL') return
+      if (state.phase === 'STEAL' || state.phase === 'SETUP') return
       state.turnTeam = action.team
       emitState()
       return
     }
 
     case 'REVEAL': {
+      if (state.phase === 'SETUP') return
+
       const a = state.current.answers[action.index]
       if (!a) return
       if (a.revealed) return
@@ -291,6 +357,8 @@ function applyAction(action: HostAction) {
     }
 
     case 'HIDE': {
+      if (state.phase === 'SETUP') return
+
       const a = state.current.answers[action.index]
       if (!a) return
       if (!a.revealed) return
@@ -298,7 +366,6 @@ function applyAction(action: HostAction) {
       const text = String(a.text ?? '').trim()
       const base = Number((a as any).points)
 
-      // si estaba raro, solo oculta visualmente
       if (!text || !Number.isFinite(base) || base <= 0) {
         state.current.answers[action.index] = { ...a, revealed: false }
         emitState()
@@ -317,12 +384,14 @@ function applyAction(action: HostAction) {
     }
 
     case 'REVEAL_ALL': {
+      if (state.phase === 'SETUP') return
       state.current.answers = state.current.answers.map((x) => ({ ...x, revealed: true }))
       emitState()
       return
     }
 
     case 'HIDE_ALL': {
+      if (state.phase === 'SETUP') return
       state.current.answers = state.current.answers.map((x) => ({ ...x, revealed: false }))
       emitState()
       return
@@ -337,8 +406,8 @@ function applyAction(action: HostAction) {
       state.teams[t].strikes = next
 
       if (next >= state.maxStrikes) {
-        const defender = t
-        const stealer = otherTeam(defender)
+        const defender: TeamId = t
+        const stealer: TeamId = otherTeam(defender)
 
         state.phase = 'STEAL'
         state.steal = { defender, stealer, resolved: false }
@@ -349,42 +418,56 @@ function applyAction(action: HostAction) {
       return
     }
 
+    /**
+     * ❌ Regla: el conductor NO puede limpiar taches manualmente.
+     * Los taches se limpian automáticamente:
+     * - en resetRoundForIndex()
+     */
     case 'STRIKE_CLEAR': {
-      state.teams.A.strikes = 0
-      state.teams.B.strikes = 0
-      if (state.phase === 'STEAL') {
-        state.phase = 'PLAYING'
-        state.steal = null
-        state.turnTeam = 'A'
-      }
-      emitState()
       return
     }
 
+    /**
+     * ✅ Robo:
+     * - Si éxito: transfiere banco y NO deja X
+     * - Si falló: se muestra 1 X al equipo que robó (stealer)
+     */
     case 'STEAL_RESOLVE': {
       if (state.phase !== 'STEAL' || !state.steal) return
 
-      const { defender, stealer } = state.steal
+      // ✅ FIX TS7053: forzamos a TeamId para indexar state.teams
+      const defender = state.steal.defender as TeamId
+      const stealer = state.steal.stealer as TeamId
 
       if (action.success) {
         const bankTotal = state.roundBank * state.current.multiplier
         state.teams[defender].score -= bankTotal
         state.teams[stealer].score += bankTotal
+
+        // ✅ si robó bien, NO debe quedar X
+        state.teams[stealer].strikes = 0
+      } else {
+        // ✅ si el robo FALLÓ, mostrar 1 X al equipo que robó
+        state.teams[stealer].strikes = 1
       }
+
+      // el defensor ya no debe verse con sus 3 taches
+      state.teams[defender].strikes = 0
 
       state.steal = { ...state.steal, resolved: true }
       state.phase = 'POST_REVEAL'
       state.scoringLocked = true
 
-      state.teams.A.strikes = 0
-      state.teams.B.strikes = 0
-
       emitState()
       return
     }
 
+    /**
+     * ✅ Regla: NO pasar de ronda si no se jugó.
+     */
     case 'NEXT_ROUND': {
-      if (state.phase === 'STEAL') return
+      if (state.phase === 'STEAL' || state.phase === 'SETUP') return
+      if (state.phase === 'PLAYING' && !roundHasProgress()) return
 
       const next = state.round + 1
       if (next > state.roundsTotal) {
@@ -401,18 +484,20 @@ function applyAction(action: HostAction) {
       return
     }
 
+    /**
+     * ❌ Bloqueado:
+     * Ya no se usa este flujo. El retador se aplica con SET_TEAMS y luego START_MATCH.
+     */
     case 'CHALLENGER_YES': {
+      return
+    }
+
+    /**
+     * ✅ NO HAY RETADOR:
+     * Volvemos a SETUP para capturar nombres y rondas.
+     */
+    case 'CHALLENGER_NO': {
       if (state.phase !== 'FINISHED') return
-
-      const w = state.winner
-      if (w === 'B') {
-        const temp = state.teams.A
-        state.teams.A = state.teams.B
-        state.teams.B = temp
-      }
-
-      state.teams.A = { ...state.teams.A, score: 0, strikes: 0 }
-      state.teams.B = { id: 'B', name: action.challengerName || 'Retador', score: 0, strikes: 0 }
 
       state.phase = 'SETUP'
       state.winner = null
@@ -421,14 +506,6 @@ function applyAction(action: HostAction) {
       matchRounds = pickValidRounds(state.roundsTotal)
       resetRoundForIndex(0)
 
-      emitState()
-      return
-    }
-
-    case 'CHALLENGER_NO': {
-      if (state.phase !== 'FINISHED') return
-      state = makeInitialState()
-      matchRounds = pickValidRounds(state.roundsTotal)
       emitState()
       return
     }

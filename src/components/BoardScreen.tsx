@@ -67,6 +67,9 @@ export default function BoardScreen() {
   const prevFinished = useRef(false)
   const prevFinishedRound = useRef<number | null>(null)
 
+  // ✅ sonido al cambiar de ronda
+  const prevRoundRef = useRef<number | null>(null)
+
   // slots X (3 por equipo)
   const strikeSlotsA = useRef<Array<HTMLDivElement | null>>([])
   const strikeSlotsB = useRef<Array<HTMLDivElement | null>>([])
@@ -79,6 +82,9 @@ export default function BoardScreen() {
   const [confetti, setConfetti] = useState<ConfettiPiece[]>([])
   const [balloons, setBalloons] = useState<Balloon[]>([])
   const prevCelebrateKey = useRef<string>('')
+
+  // ✅ para efecto “destapar” (dispara animación cuando un idx pasa a revealed)
+  const revealedVersionRef = useRef(0)
 
   const current = stableCurrent
   const answersRaw = current?.answers ?? []
@@ -99,12 +105,34 @@ export default function BoardScreen() {
     return fallbackMs
   }
 
-  // ✅ sonido reveal
+  // ✅ sonido reveal + version para animación destape
   useEffect(() => {
     if (!stableState) return
-    if (revealedCount > prevRevealed.current) void playSound('correcto')
+    if (revealedCount > prevRevealed.current) {
+      void playSound('correcto')
+      revealedVersionRef.current += 1
+    }
     prevRevealed.current = revealedCount
   }, [revealedCount, stableState])
+
+  // ✅ SONIDO "RONDA" cada vez que cambia la ronda
+  useEffect(() => {
+    if (!stableState) return
+    const r = stableState.round
+
+    if (prevRoundRef.current === null) {
+      prevRoundRef.current = r
+      return
+    }
+
+    if (r !== prevRoundRef.current) {
+      prevRoundRef.current = r
+      void playSound('ronda', { restart: true })
+      // resetea contador de reveal “previo” para no “animar raro” si cambia el array
+      prevRevealed.current = 0
+      revealedVersionRef.current += 1
+    }
+  }, [stableState?.round, stableState])
 
   // ✅ X: aparece al centro el MISMO tiempo que "incorrecto" y luego vuela al equipo
   useEffect(() => {
@@ -171,8 +199,8 @@ export default function BoardScreen() {
         prevFinishedRound.current = stableState.round
 
         if (hasWinnerAB) {
-          if (isLastRound) void playSound('triunfo')
-          else void playSound('ronda')
+          if (isLastRound) void playSound('triunfo', { restart: true })
+          else void playSound('ronda', { restart: true })
         }
       }
     }
@@ -344,25 +372,12 @@ export default function BoardScreen() {
       {/* CONTENIDO */}
       <div className={styles.wrap}>
         <header className={styles.header}>
+          {/* ✅ SOLO CHIP DE RONDA */}
           <div className={styles.titleBox}>
-            <div className={styles.title}>100 mexicanos dijeron</div>
             <div className={styles.sub}>
               <span className={styles.pill}>
                 Ronda <b>{stableState.round}</b>/{stableState.roundsTotal}
               </span>
-              <span className={styles.pill}>
-                {current.label} · x<b>{current.multiplier}</b>
-              </span>
-              <span className={`${styles.pill} ${styles.gold}`}>
-                Banco <b>{stableState.roundBank}</b>
-              </span>
-              {isSteal ? (
-                <span className={`${styles.pill} ${styles.warn}`}>
-                  🔥 Robo: {stableState.turnTeam === 'A' ? stableState.teams.A.name : stableState.teams.B.name}
-                </span>
-              ) : (
-                <span className={`${styles.pill} ${styles.ok}`}>✅ Normal</span>
-              )}
             </div>
           </div>
         </header>
@@ -405,7 +420,14 @@ export default function BoardScreen() {
 
             <div className={styles.answers}>
               {answers.map((a: any, i: number) => (
-                <AnswerRow key={i} idx={i + 1} revealed={a.revealed} text={a.text} points={a.points} />
+                <AnswerRow
+                  key={i}
+                  idx={i + 1}
+                  revealed={a.revealed}
+                  text={a.text}
+                  points={a.points}
+                  revealPulseKey={`${revealedVersionRef.current}-${i}-${a.revealed ? 1 : 0}`}
+                />
               ))}
             </div>
 
@@ -449,36 +471,53 @@ export default function BoardScreen() {
   )
 }
 
-/* ========= Inline AnswerRow (sin otro archivo) ========= */
+/* ========= Inline AnswerRow ========= */
 function AnswerRow({
   idx,
   revealed,
   text,
   points,
+  revealPulseKey,
 }: {
   idx: number
   revealed: boolean
   text: string
   points: number
+  revealPulseKey: string
 }) {
+  // ✅ cuando se revela, cambiamos una key interna para reiniciar animación
+  const [flipKey, setFlipKey] = useState('')
+
+  useEffect(() => {
+    if (revealed) setFlipKey(revealPulseKey)
+  }, [revealed, revealPulseKey])
+
   return (
     <div className={styles.ar}>
       <div className={styles.n}>{idx}</div>
 
+      {/* “tapa” + “destape” */}
       <div className={styles.mid}>
-        <div
-          className={styles.t}
-          style={{
-            letterSpacing: revealed ? '0' : '.10em',
-            opacity: revealed ? 1 : 0.65,
-          }}
-        >
-          {revealed ? text : '█████████████████████'}
-        </div>
         <div className={styles.dots} aria-hidden="true" />
+
+        {!revealed ? (
+          <div className={styles.cover} aria-hidden="true">
+            █████████████████████
+          </div>
+        ) : (
+          <div key={flipKey} className={styles.revealFx}>
+            <div className={styles.revealText}>{text}</div>
+          </div>
+        )}
       </div>
 
-      <div className={styles.p}>{revealed ? points : ''}</div>
+      <div className={styles.p}>
+        {!revealed ? '' : (
+          <div key={flipKey + '-p'} className={styles.revealPts}>
+            {points}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
